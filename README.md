@@ -14,7 +14,7 @@ A CLI tool written in Rust for downloading documentation files from websites tha
 ### From Source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/h0wl/llmsdl
 cd llmsdl
 cargo build --release
 ```
