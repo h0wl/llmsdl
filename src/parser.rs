@@ -23,8 +23,8 @@ pub fn parse_llms_txt(content: &str, base_url: &str) -> Result<Vec<String>, Down
     for line in content.lines() {
         let trimmed = line.trim();
         
-        // Skip empty lines and comments (lines starting with #)
-        if trimmed.is_empty() || trimmed.starts_with('#') {
+        // Skip empty lines, comments (#), and blockquotes (>)
+        if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('>') {
             continue;
         }
         
@@ -32,6 +32,8 @@ pub fn parse_llms_txt(content: &str, base_url: &str) -> Result<Vec<String>, Down
         if let Some(file_path) = extract_file_path(trimmed) {
             // Resolve the URL (convert relative to absolute if needed)
             let resolved_url = resolve_url(&file_path, &base)?;
+            // Append .md for doc links that have no extension (e.g. Elastic-style URLs)
+            let resolved_url = ensure_md_extension(&resolved_url)?;
             file_urls.push(resolved_url);
         }
     }
@@ -58,8 +60,8 @@ fn extract_file_path(line: &str) -> Option<String> {
     if let Some(start) = trimmed.find("](") {
         if let Some(end) = trimmed[start + 2..].find(')') {
             let path = &trimmed[start + 2..start + 2 + end];
-            // Only return paths that look like file paths (contain . or end with .md)
-            if path.contains('.') || path.ends_with(".md") {
+            // Accept file paths: with extension, or relative paths (we may append .md later)
+            if path.contains('.') || path.ends_with(".md") || path.starts_with('/') {
                 return Some(path.to_string());
             }
         }
@@ -95,5 +97,31 @@ pub fn resolve_url(path: &str, base: &Url) -> Result<String, DownloadError> {
         .map_err(|e| DownloadError::ParseError(format!("Failed to resolve URL '{path}' against base '{base}': {e}")))?;
     
     Ok(resolved.to_string())
+}
+
+/// Ensures documentation URLs have a .md extension when they have no file extension.
+/// Many sites (e.g. Elastic docs) use paths like /docs/get-started that serve HTML;
+/// appending .md requests the markdown version.
+pub fn ensure_md_extension(url_str: &str) -> Result<String, DownloadError> {
+    let mut url = Url::parse(url_str)
+        .map_err(|e| DownloadError::InvalidUrl(format!("Invalid URL '{url_str}': {e}")))?;
+    let path = url.path();
+    if path.is_empty() || path == "/" {
+        return Ok(url_str.to_string());
+    }
+    let last_segment = path
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
+    // Only append .md when the last path segment has no extension (no dot)
+    let needs_md = !last_segment.is_empty()
+        && !last_segment.contains('.')
+        && last_segment != "."
+        && last_segment != "..";
+    if needs_md {
+        url.set_path(&format!("{path}.md"));
+        return Ok(url.to_string());
+    }
+    Ok(url_str.to_string())
 }
 

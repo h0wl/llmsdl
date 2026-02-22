@@ -14,11 +14,19 @@ pub struct HttpClient {
     base_delay: Duration,
 }
 
+/// User-Agent sent with requests. Many doc servers (e.g. Elastic) return 403 for
+/// default library User-Agents; a recent Chrome UA is accepted.
+const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
 impl HttpClient {
     /// Create a new HTTP client with default settings
     pub fn new() -> Self {
+        let client = Client::builder()
+            .user_agent(USER_AGENT)
+            .build()
+            .expect("default HTTP client");
         Self {
-            client: Client::new(),
+            client,
             max_retries: 3,
             base_delay: Duration::from_millis(500),
         }

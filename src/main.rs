@@ -23,8 +23,8 @@ use file_manager::{create_local_directory, get_local_file_path};
 #[command(about = "Downloads documentation files from llms.txt enabled websites")]
 #[command(version)]
 struct Args {
-    /// The base URL of the website to check for llms.txt
-    #[arg(help = "Website URL (e.g., https://example.com)")]
+    /// Base URL of the site or direct URL to llms.txt
+    #[arg(help = "Website URL (e.g. https://example.com) or direct llms.txt URL (e.g. https://example.com/docs/llms.txt)")]
     url: String,
     
     /// Output directory for downloaded documentation files
@@ -40,13 +40,14 @@ struct Args {
 async fn main() -> Result<(), DownloadError> {
     let args = Args::parse();
     
-    // Validate the URL format
+    // Validate the URL format and normalize direct llms.txt URLs
     let validated_url = validate_url(&args.url)?;
+    let (base_url, llms_txt_url) = normalize_llms_url(&validated_url);
     
-    println!("🔍 Processing URL: {validated_url}");
+    println!("🔍 Processing URL: {base_url}");
     
     // Process the URL and download files
-    match process_url(&validated_url, &args.output, args.threads).await {
+    match process_url(&base_url, &llms_txt_url, &args.output, args.threads).await {
         Ok(result) => {
             // Display final summary
             println!("\n✅ Process completed!");
@@ -70,23 +71,35 @@ async fn main() -> Result<(), DownloadError> {
     Ok(())
 }
 
+/// Normalizes the user-provided URL: if it's a direct llms.txt URL, returns (base_url, llms_txt_url);
+/// otherwise returns (base_url, base_url/llms.txt).
+fn normalize_llms_url(url: &str) -> (String, String) {
+    let u = url.trim_end_matches('/');
+    if u.len() >= 8 && u.get(u.len().saturating_sub(8)..).map(|s| s.eq_ignore_ascii_case("llms.txt")).unwrap_or(false) {
+        let base_url = u[..u.len().saturating_sub(8)].trim_end_matches('/').to_string();
+        (base_url, u.to_string())
+    } else {
+        (u.to_string(), format!("{u}/llms.txt"))
+    }
+}
+
 /// Main processing function that orchestrates the entire download workflow
-async fn process_url(base_url: &str, output_dir: &str, max_concurrent: usize) -> Result<DownloadResult, DownloadError> {
+async fn process_url(base_url: &str, llms_txt_url: &str, output_dir: &str, max_concurrent: usize) -> Result<DownloadResult, DownloadError> {
     let client = HttpClient::new();
     let mut result = DownloadResult::new();
     
-    // Step 1: Check for llms.txt file
-    let llms_txt_url = format!("{base_url}/llms.txt");
+    // Step 1: Fetch llms.txt (from direct URL or base_url/llms.txt)
     println!("🔍 Looking for llms.txt at: {llms_txt_url}");
     
-    let llms_content = match client.fetch_content(&llms_txt_url).await {
+    let llms_content = match client.fetch_content(llms_txt_url).await {
         Ok(content) => {
             println!("✅ Found llms.txt file");
             content
         }
         Err(e) => {
             return Err(DownloadError::ParseError(format!(
-                "Could not find or access llms.txt at {llms_txt_url}: {e}"
+                "Could not find or access llms.txt at {}: {e}",
+                llms_txt_url
             )));
         }
     };

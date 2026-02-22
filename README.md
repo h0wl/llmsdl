@@ -5,13 +5,29 @@ A CLI tool written in Rust for downloading documentation files from websites tha
 ## Features
 
 - **Automatic Discovery**: Finds and parses `llms.txt` files from any website
+- **Direct llms.txt URL**: Pass a direct URL to an `llms.txt` file (e.g. `https://example.com/docs/llms.txt`) and the tool will use it and derive the base URL
+- **Markdown-friendly URLs**: For doc links without a file extension (e.g. Elastic-style `/docs/get-started`), the tool appends `.md` so you get markdown instead of HTML
 - **Concurrent Downloads**: Downloads multiple files simultaneously for speed
 - **Structure Preservation**: Maintains original directory structure locally
 - **Multiple Formats**: Supports both plain file paths and markdown-style links in llms.txt
 
 ## Installation
 
-### From Source
+### Prerequisites
+
+- [Rust](https://rustup.rs/) (rustc, cargo). Install with: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+### Build and install (recommended)
+
+From the project directory:
+
+```bash
+cargo install --path .
+```
+
+This compiles the project in release mode and installs the `llmsdl` binary into Cargo’s bin directory (e.g. `~/.cargo/bin/llmsdl`). Ensure that directory is on your `PATH`.
+
+### Build from source (binary only)
 
 ```bash
 git clone https://github.com/h0wl/llmsdl
@@ -19,45 +35,50 @@ cd llmsdl
 cargo build --release
 ```
 
-The binary will be available at `target/release/llmsdl`.
-
-### Using Cargo
-
-```bash
-cargo install --path .
-```
+The binary will be at `target/release/llmsdl`. Run it with `./target/release/llmsdl` or copy/link it to a directory on your `PATH`.
 
 ## Usage
 
 ### Basic Usage
 
 ```bash
-llmsdl https://docs.example.com
+llmsdl https://docs.example.com -o ./downloads
 ```
 
-This will:
+You can pass either a **base URL** or a **direct llms.txt URL**:
 
-1. Look for `llms.txt` at `https://docs.example.com/llms.txt`
-2. Parse the file to extract documentation URLs
-3. Download all files to `downloads/docs.example.com/`
+- **Base URL**: The tool looks for `llms.txt` at `{url}/llms.txt`.
+- **Direct llms.txt URL**: Use the full URL to the file (e.g. `https://www.elastic.co/docs/llms.txt`). The tool fetches that file and derives the base URL for resolving links.
+
+The tool will:
+
+1. Fetch `llms.txt` (from the given URL or from `{base}/llms.txt`)
+2. Parse it to extract documentation URLs (appending `.md` when a link has no file extension, so you get markdown instead of HTML where supported)
+3. Download all files under the output directory, organized by domain
 4. Preserve the original directory structure
 
 ### Examples
 
 ```bash
-# Download from a documentation site
-llmsdl https://docs.example.com
+# Base URL: look for llms.txt at that origin
+llmsdl https://docs.example.com -o ./downloads
 
-# Download from localhost (useful for development)
-llmsdl http://localhost:3000
+# Direct llms.txt URL (e.g. Elastic docs)
+llmsdl https://www.elastic.co/docs/llms.txt -o ./elastic-docs
 
-# Download from a site with custom port
-llmsdl https://docs.example.com:8080
+# Localhost (development)
+llmsdl http://localhost:3000 -o ./downloads
+
+# Custom port
+llmsdl https://docs.example.com:8080 -o ./downloads
+
+# Limit concurrency (default is 5)
+llmsdl https://docs.example.com -o ./downloads -t 3
 ```
 
 ## Output Structure
 
-Files are downloaded to a `downloads/` directory in your current working directory, organized by domain:
+Files are saved under the directory you pass with `-o` (e.g. `./downloads`), organized by domain:
 
 ```
 downloads/
@@ -98,6 +119,10 @@ README.md
 - [API Reference](/api/reference.md)
 https://external-site.com/shared-doc.md
 ```
+
+### Extensionless doc links
+
+For links without a file extension (e.g. `https://example.com/docs/get-started` or `](/docs/get-started)`), the tool appends `.md` when fetching, so sites that serve markdown at `.../path.md` (e.g. [Elastic’s llms.txt](https://www.elastic.co/docs/llms.txt)) are downloaded as markdown instead of HTML.
 
 ## Development
 
