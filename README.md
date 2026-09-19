@@ -78,7 +78,7 @@ llmsdl https://docs.example.com -o ./downloads -t 3
 
 ## Output Structure
 
-Files are saved under the directory you pass with `-o` (e.g. `./downloads`), organized by domain:
+Files are saved under the directory you pass with `-o` (e.g. `./downloads`), organized by domain (including the port when present, for example `docs.example.com_8080`):
 
 ```
 downloads/
